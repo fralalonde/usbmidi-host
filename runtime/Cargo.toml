@@ -1,0 +1,24 @@
+[package]
+authors = ["Francis Lalonde <fralalonde@gmail.com>"]
+edition = "2021"
+name = "runtime"
+readme = "README.md"
+version = "0.1.0"
+
+[dependencies]
+woke = { path = "../woke" }
+sync-thumbv6m = { path = "../sync-thumbv6m" }
+embedded-time = { path = "../../embedded-time" }
+
+defmt = "0.3"
+defmt-rtt = "0.3"
+panic-probe = { version = "0.3", features = ["print-defmt"] }
+
+embedded-hal = "0.2"
+atomic-polyfill = "0.1"
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+heapless  = "0.7"
+
+hash32 = "0.2.1"
+buddy-alloc = "0.4"
