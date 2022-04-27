@@ -4,9 +4,9 @@ use buddy_alloc::{NonThreadsafeAlloc};
 use core::alloc::{Layout, GlobalAlloc};
 use cortex_m::asm;
 
-// define what happens in an Out Of Memory (OOM) condition
 #[alloc_error_handler]
-fn alloc_error(_layout: Layout) -> ! {
+fn alloc_error(layout: Layout) -> ! {
+    error!("Failed to allocate {}", layout);
     asm::bkpt();
     loop {}
 }

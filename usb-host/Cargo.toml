@@ -16,7 +16,6 @@ utf16string = { path = "../../utf16string", default-features = false, features =
 defmt = "0.3"
 hash32 = "0.2"
 runtime = { path = "../runtime" }
-sync-thumbv6m = { path = "../sync-thumbv6m" }
 
 strum = { version = "0.23", default-features = false }
 strum_macros = "0.23"

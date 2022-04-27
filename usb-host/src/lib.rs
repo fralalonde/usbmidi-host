@@ -16,7 +16,6 @@ extern crate alloc;
 extern crate defmt;
 
 use async_trait::async_trait;
-use alloc::boxed::Box;
 
 pub mod descriptor;
 pub mod control;

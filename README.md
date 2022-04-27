@@ -11,8 +11,7 @@ Intended to be used as companion board for https://github.com/fralalonde/usbmidi
 ## Platform:
 
 - Adafruit Trinket M0 (Atmel SAM D21)
-- RTIC
-- Async Rust
+- Rust
 
 Uses async-modified versions of the `usb-host` and `atsamd-usb-host` crates.
 

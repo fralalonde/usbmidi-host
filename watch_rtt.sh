@@ -6,10 +6,10 @@
 # requires netcat (nc)
 
 BASEDIR="$( cd "$( dirname "$0" )" && pwd )"
-TELNET_PORT=4444
-RTT_PORT=8745
-# TODO support switching target debug<>release
-ELF_FILE=$BASEDIR/target/thumbv6m-none-eabi/release/usbmidi-host
+TELNET_PORT=4442
+RTT_PORT=8742
+BUILD=${1:-debug}
+ELF_FILE=$BASEDIR/target/thumbv6m-none-eabi/$BUILD/usbmidi-host
 
 if ! nc -z localhost $TELNET_PORT; then
   echo "OpenOCD not running? Else make sure it is listening for telnet on port $TELNET_PORT"
@@ -21,7 +21,7 @@ fi
 
 if ! nc -z localhost $RTT_PORT; then
   # get address of static RTT buffer from binary
-  block_addr=0x$(rust-nm -S $ELF_FILE | grep SEGGER_RTT | cut -d' ' -f1)
+  block_addr=0x$(rust-nm -S "$ELF_FILE" | grep SEGGER_RTT | cut -d' ' -f1)
   echo "Starting RTT from block addr $block_addr (from $ELF_FILE)"
 
   # tell GDB to start its RTT server
@@ -47,6 +47,6 @@ fi
 
 # if using defmt over RTT
 echo "Watching RTT/defmt"
-nc localhost $RTT_PORT | defmt-print -e $ELF_FILE
+nc localhost $RTT_PORT | defmt-print -e "$ELF_FILE"
 
 
