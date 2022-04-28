@@ -3,7 +3,7 @@ use core::fmt::{Debug, Formatter};
 
 use heapless::{Deque, FnvIndexMap, Vec};
 
-use usb_host::{DeviceDescriptor, Direction, Driver, DriverError, Endpoint, InterfaceDescriptor,/* SingleEp,*/ TransferError, USBHost};
+use usb_host::{DeviceDescriptor, Direction, Driver, DriverError, Endpoint, InterfaceDescriptor,/* SingleEp,*/ TransferError, UsbHost};
 use usb_host::address::Address;
 
 use usb_host::device::Device;
@@ -225,7 +225,7 @@ impl Driver for UsbMidiDriver {
         // TODO
     }
 
-    fn tick(&mut self, millis: u64, usbhost: &mut dyn USBHost) -> Result<(), DriverError> {
+    fn tick(&mut self, usbhost: &mut dyn UsbHost) -> Result<(), DriverError> {
         // TODO
         Ok(())
     }

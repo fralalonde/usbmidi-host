@@ -59,7 +59,7 @@ use atsamd_hal::rtc::Rtc;
 use cortex_m::asm::delay;
 
 
-use usb_host::{Address, AddressPool, Driver, HostEvent, SingleEp};
+use usb_host::{Address, AddressPool, Driver, HostEvent, SingleEp, UsbStack};
 
 use heapless::Vec;
 use runtime::{Local, Shared};
@@ -69,10 +69,10 @@ static CORE: Local<CorePeripherals> = Local::uninit("CORE");
 
 static UART_MIDI: Shared<SerialMidi<UART0<Sercom0Pad3<Pa7<PfD>>, Sercom0Pad2<Pa6<PfD>>, (), ()>>> = Shared::uninit("UART_MIDI");
 
-static USB_HOST: Shared<SAMDHost> = Shared::uninit("USB_HOST");
-static USB_MIDI_DRIVER: Shared<UsbMidiDriver> = Shared::uninit("USB_MIDI_DRIVER");
-static USB_ADDR_POOL: Shared<AddressPool> = Shared::uninit("USB_ADDR_POOL");
-static USB_MIDI_PORT: Shared<Option<SingleEp>> = Shared::uninit("USB_MIDI_PORT");
+// static USB_HOST: Local<SAMDHost> = Local::uninit("USB_HOST");
+static USB_MIDI_DRIVER: Local<UsbMidiDriver> = Local::uninit("USB_MIDI_DRIVER");
+
+static USB_STACK: Shared<UsbStack<SAMDHost>> = Shared::uninit("USB_STACK");
 
 const RXC: u8 = 0x04;
 
@@ -142,10 +142,10 @@ fn main() -> ! {
     );
     info!("USB Host OK");
 
-    USB_MIDI_DRIVER.init_static(UsbMidiDriver::default());
-    USB_ADDR_POOL.init_static(AddressPool::new());
+    let usb_driver = USB_MIDI_DRIVER.init_static(UsbMidiDriver::default());
     usb_host.reset_host();
-    USB_HOST.init_static(usb_host);
+
+    USB_STACK.init_static(UsbStack::new(usb_host, usb_driver));
 
     info!("Board Initialization Complete");
 
@@ -198,29 +198,10 @@ fn midi_route(binding: Binding, packets: PacketList) {
 #[interrupt]
 fn USB() {
     NVIC::mask(interrupt::USB);
-    let mut usb = USB_HOST.lock();
+    let mut usb = USB_STACK.lock();
     let mut serial = UART_MIDI.lock();
-    let mut drivers = USB_MIDI_DRIVER.lock();
-    let mut addr_pool = USB_ADDR_POOL.lock();
 
-    let usb_irq = usb.next_irq();
-    if let Some(host_event) = usb.update(usb_irq, &mut addr_pool) {
-        match host_event {
-            HostEvent::Ready(device) => {
-                info!("USB Host Ready {:?}", device)
-                // TODO register device, call drivers for match
-            }
-            HostEvent::Reset => {
-                info!("USB Host Reset")
-                // TODO clear pool, call drivers for unregister
-            }
-            HostEvent::Tick => {
-                // TODO call drivers for push reads
-            }
-        }
-    }
-
-    // TODO set / unset usb midi port on attach / detach
+    usb.handle_irq();
 
     // TODO if usb midi device connected  read any packet from port
     //  if let Some(port) = port {
@@ -236,10 +217,8 @@ fn USB() {
 fn SERCOM0() {
     NVIC::mask(interrupt::SERCOM0);
 
-    let mut usb = USB_HOST.lock();
+    let mut usb = USB_STACK.lock();
     let mut serial = UART_MIDI.lock();
-    let mut usb_midi = USB_MIDI_DRIVER.lock();
-    let port = USB_MIDI_PORT.lock();
 
     // if let Ok(byte) = serial.receive() {
     //     if let Some(port) = port {
