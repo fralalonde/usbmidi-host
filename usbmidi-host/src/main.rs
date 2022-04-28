@@ -142,7 +142,7 @@ fn main() -> ! {
     info!("USB Host OK");
 
     USB_MIDI_DRIVER.init_static(UsbMidiDriver::default());
-    usb_host.reset_periph();
+    usb_host.reset_host();
     USB_HOST.init_static(usb_host);
 
     info!("Board Initialization Complete");

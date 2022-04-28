@@ -212,19 +212,22 @@ impl Driver for UsbMidiDriver {
     // }
 
     fn want_device(&self, device: &DeviceDescriptor) -> bool {
-        todo!()
+        // TODO
+        false
     }
 
     fn add_device(&mut self, device: DeviceDescriptor, address: u8) -> Result<(), DriverError> {
-        todo!()
+        // TODO
+        Ok(())
     }
 
     fn remove_device(&mut self, address: u8) {
-        todo!()
+        // TODO
     }
 
     fn tick(&mut self, millis: u64, usbhost: &mut dyn USBHost) -> Result<(), DriverError> {
-        todo!()
+        // TODO
+        Ok(())
     }
 
     // fn tick(&mut self, host: &mut dyn USBHost) -> Result<(), DriverError> {
