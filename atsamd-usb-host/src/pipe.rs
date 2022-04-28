@@ -198,8 +198,6 @@ impl Pipe<'_, '_> {
         let intflag = self.regs.intflag.read();
         let status_pipe = self.desc.bank0.status_pipe.read();
 
-
-
         match token {
             PToken::Setup if intflag.txstp().bit_is_set() => {
                 self.regs.intflag.write(|w| w.txstp().set_bit());
