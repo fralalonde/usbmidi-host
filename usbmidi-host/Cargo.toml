@@ -12,11 +12,12 @@ cortex-m-rt = "0.7"
 atsamd-hal = { version = "0.14", features = ["usb", "samd21e-rt"] }
 
 trinket_m0 = { version = "0.11", features = ["usb", "default", "unproven"] }
-#atsamd-usb-host = { path = "../../atsamd-usb-host", features = ["samd21e"] }
 
 atsamd-usb-host = { path = "../../atsamd-usb-host", features = ["samd21e"] }
 usb-host = { path = "../../usb-host" }
 defmt = "0.3"
+#spin = "0.9"
+spin = { path = "../../spin-rs", features = ["portable_atomic"] }
 
 embedded-midi = { git = "https://github.com/fralalonde/embedded-midi.git", branch = "main", features = ["defmt"] }
 #embedded-midi = { path = "../../embedded-midi", features = ["defmt"] }

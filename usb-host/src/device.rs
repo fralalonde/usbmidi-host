@@ -11,7 +11,8 @@ use crate::Endpoint;
 #[derive(Copy, Clone, Debug, PartialEq, defmt::Format)]
 enum DeviceState {
     Init,
-    Settling(u64),
+    // Settling(u64),
+    Addressed,
     GetConfig,
     SetConfig(u8),
     SetProtocol,
@@ -87,6 +88,7 @@ impl Device {
         if 0u8 == self.address.into() {
             self.control_set(host, RequestCode::SetAddress, dev_addr.into(), 0, 0).await?;
             self.address = dev_addr;
+            self.state = DeviceState::Addressed;
             Ok(())
         } else {
             Err(TransferError::Permanent("Device Address Already Set"))

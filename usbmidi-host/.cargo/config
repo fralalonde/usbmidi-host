@@ -11,6 +11,7 @@ rustflags = [
     "-C", "link-arg=-Tlink.x",
     "-C", "link-arg=-Tdefmt.x",
     "-C", "link-arg=--nmagic",
+    "--cfg", "portable_atomic_unsafe_assume_single_core",
 ]
 
 [env]
