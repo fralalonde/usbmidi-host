@@ -6,8 +6,9 @@ extern crate runtime;
 
 extern crate embedded_midi as midi;
 
+extern crate embedded_usb_host as usb_host;
+
 mod port;
-mod usb_midi;
 
 use trinket_m0 as bsp;
 
@@ -19,13 +20,11 @@ use cortex_m::peripheral::NVIC;
 
 use trinket_m0::clock::{ClockGenId, ClockSource};
 
-use core::mem;
-use core::ops::DerefMut;
+use crate::midi::MidiPorts;
+use core::ops::{ DerefMut};
 
 use atsamd_hal as hal;
-use hal::pac;
 
-use atsamd_usb_host::{Pins, SAMDHost};
 
 use hal::sercom::{
     v2::{
@@ -39,18 +38,16 @@ use hal::sercom::{
     I2CMaster0,
 };
 
-use hal::delay::Delay;
-
 use atsamd_hal::time::{Hertz};
 use atsamd_hal::gpio::v2::*;
 use atsamd_hal::sercom::UART0;
 
-use crate::usb_midi::UsbMidiDriver;
+use embedded_usb_host::driver::UsbMidiDriver;
 
 use hal::sercom::*;
 use atsamd_hal::gpio::{self, *};
 
-use midi::{CableNumber, PacketList, Binding, Receive};
+use midi::{CableNumber, PacketList, Binding, MidiRegistry, PortId, Transmit, Packet, MidiError, PortDirection};
 
 
 use atsamd_hal::gpio::PfD;
@@ -59,20 +56,19 @@ use atsamd_hal::rtc::Rtc;
 use cortex_m::asm::delay;
 
 
-use usb_host::{Address, AddressPool, Driver, HostEvent, SingleEp, UsbStack};
+use usb_host::{ AddressPool, atsamd, Driver, HostEvent, SingleEp, UsbStack};
 
-use heapless::Vec;
 use runtime::{Local, Shared};
-use crate::port::serial::SerialMidi;
+use crate::port::serial::UartMidi;
 
 static CORE: Local<CorePeripherals> = Local::uninit("CORE");
 
-static UART_MIDI: Shared<SerialMidi<UART0<Sercom0Pad3<Pa7<PfD>>, Sercom0Pad2<Pa6<PfD>>, (), ()>>> = Shared::uninit("UART_MIDI");
+static UART_MIDI: Shared<UartMidi<UART0<Sercom0Pad3<Pa7<PfD>>, Sercom0Pad2<Pa6<PfD>>, (), ()>>> = Shared::uninit("UART_MIDI");
+static MIDI_PORTS: Shared<MidiRegistry<2>> = Shared::uninit("MIDI_PORTS");
 
-// static USB_HOST: Local<SAMDHost> = Local::uninit("USB_HOST");
 static USB_MIDI_DRIVER: Local<UsbMidiDriver> = Local::uninit("USB_MIDI_DRIVER");
 
-static USB_STACK: Shared<UsbStack<SAMDHost>> = Shared::uninit("USB_STACK");
+static USB_STACK: Shared<UsbStack<atsamd::HostController>> = Shared::uninit("USB_STACK");
 
 const RXC: u8 = 0x04;
 
@@ -100,13 +96,11 @@ fn main() -> ! {
 
     let mut pins = bsp::Pins::new(peripherals.PORT);
     let mut red_led = pins.d13.into_open_drain_output(&mut pins.port);
-    // let mut delay = Delay::new(core.SYST, &mut clocks);
-
 
     let timer_clock = clocks
         .configure_gclk_divider_and_source(ClockGenId::GCLK4, 1, ClockSource::OSC32K, false)
         .unwrap();
-    let tc45 = &clocks.tc4_tc5(&timer_clock).unwrap();
+    // let tc45 = &clocks.tc4_tc5(&timer_clock).unwrap();
 
     // let mut tc4 = TimerCounter::tc4_(tc45, peripherals.TC4, &mut peripherals.PM);
     // tc4.start(800.hz());
@@ -122,17 +116,17 @@ fn main() -> ! {
         &mut pins.port,
     );
     serial.intenset(|r| unsafe { r.bits(RXC); });
-    let serial_midi = crate::port::serial::SerialMidi::new(serial, CableNumber::MIN);
+    let serial_midi = crate::port::serial::UartMidi::new(serial, CableNumber::MIN);
     info!("Serial OK");
 
-    let usb_pins = Pins::new(
+    let usb_pins = atsamd::HostPins::new(
         pins.usb_dm.into_floating_input(&mut pins.port),
         pins.usb_dp.into_floating_input(&mut pins.port),
         Some(pins.usb_sof.into_floating_input(&mut pins.port)),
         Some(pins.usb_host_enable.into_floating_input(&mut pins.port)),
     );
 
-    let mut usb_host = SAMDHost::new(
+    let mut usb_host = embedded_usb_host::atsamd::HostController::new(
         peripherals.USB,
         usb_pins,
         &mut pins.port,
@@ -142,7 +136,8 @@ fn main() -> ! {
     );
     info!("USB Host OK");
 
-    let usb_driver = USB_MIDI_DRIVER.init_static(UsbMidiDriver::default());
+    let mut driver = UsbMidiDriver::new(with_midi);
+    let usb_driver = USB_MIDI_DRIVER.init_static(driver);
     usb_host.reset_host();
 
     USB_STACK.init_static(UsbStack::new(usb_host, usb_driver));
@@ -157,18 +152,17 @@ fn main() -> ! {
         NVIC::unmask(interrupt::SERCOM0);
     }
 
-    // runtime::spawn(async {
-    //     // let d = Drivers::new()
-    //     loop {
-    //         unsafe { USB_HOST.assume_init_mut().update(HostEvent::NoEvent, &mut USB_DRIVERS).await }
-    //         runtime::delay_us(125).await;
-    //     }
-    // });
-
     loop {
         red_led.toggle();
         delay(12_000_000);
+        info!("time is {}", runtime::now_millis())
     }
+}
+
+fn with_midi(fun: &mut dyn FnMut(&mut (dyn MidiPorts + Send + Sync))) {
+    let mut mlock = MIDI_PORTS.lock();
+    // let midi = MIDI_PORTS.lock().deref_mut();
+    fun(mlock.deref_mut())
 }
 
 fn midi_route(binding: Binding, packets: PacketList) {
@@ -176,39 +170,41 @@ fn midi_route(binding: Binding, packets: PacketList) {
     // router.midi_route(cx.scheduled, packets, binding, cx.spawn).unwrap();
 }
 
-// #[interrupt]
-// fn TC4() {
-//     exec::spawn(usb_service(HostEvent::NoEvent));
-//     unsafe { TC4::ptr().as_ref().unwrap().count16().intflag.modify(|_, w| w.ovf().set_bit()); }
-// }
-
-// #[interrupt]
-// fn SERCOM0() {
-//     debug!("serial irq");
-//     trace!("IRQ SERCOM0");
-//     if let Err(err) = cx.shared.serial_midi.lock(|m| m.flush()) {
-//         error!("Serial flush failed {:?}", err);
-//     }
-//
-//     while let Ok(Some(packet)) = cx.shared.serial_midi.lock(|m| m.receive()) {
-//         midi_route::spawn(Src(UPSTREAM_SERIAL), PacketList::single(packet)).unwrap();
-//     }
-// }
-
 #[interrupt]
 fn USB() {
     NVIC::mask(interrupt::USB);
     let mut usb = USB_STACK.lock();
-    let mut serial = UART_MIDI.lock();
-
+    // process any changes or data
     usb.handle_irq();
 
-    // TODO if usb midi device connected  read any packet from port
-    //  if let Some(port) = port {
-    //      if let Err(e) = serial.write(&[byte]) {
-    //          defmt::info!("USB write err {:?}", e);
-    //      }
-    //  }
+    let mut midi = MIDI_PORTS.lock();
+
+    // copy MIDI packets from first found USB port to UART
+    for handle in midi.list_ports().iter().next() {
+        if let Ok(info) = midi.info(handle) {
+            if matches!(info.port_id, PortId::Usb(_)) && matches!(info.direction, PortDirection::In) {
+                let mut serial = UART_MIDI.lock();
+                loop {
+                    // dont read from USB if serial buffer is full
+                    // if serial.is_tx_full() { break; }
+                    match midi.read(handle) {
+                        Ok(Some(packet)) => {
+                            info!("!!! got usb midi packet");
+                            if let Err(err) = serial.transmit(packet) {
+                                warn!("Serial MIDI error")
+                            }
+                        }
+                        Err(err) => {
+                            warn!("Failed to read from port: {}", info);
+                            break;
+                        }
+
+                        Ok(None) => break
+                    }
+                }
+            }
+        }
+    }
 
     unsafe { NVIC::unmask(interrupt::USB) }
 }
@@ -222,7 +218,7 @@ fn SERCOM0() {
 
     // if let Ok(byte) = serial.receive() {
     //     if let Some(port) = port {
-    //         usb_midi,transmit(port, &[byte])
+    //         usb_midi, transmit(port, &[byte])
     //     }
     // }
 

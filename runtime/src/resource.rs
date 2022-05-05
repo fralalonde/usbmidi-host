@@ -1,13 +1,12 @@
 /// Async mutex.
 
 use core::cell::{UnsafeCell};
-use core::future::{poll_fn};
 use core::mem::MaybeUninit;
 
 use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{Ordering};
-use core::sync::atomic::Ordering::SeqCst;
-use core::task::{Poll, Waker};
+use core::sync::atomic::Ordering::{AcqRel, Relaxed, SeqCst};
+use core::task::{Waker};
 use atomic_polyfill::AtomicBool;
 
 use crate::array_queue::ArrayQueue;
@@ -41,7 +40,7 @@ impl<T: Sized + Send> Local<T> {
     }
 
     pub fn init_static(&self, value: T) -> &mut T {
-        match self.init.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst) {
+        match self.init.compare_exchange(false, true, Relaxed, Relaxed) {
             Ok(false) => unsafe {
                 let z = &mut (*self.value.get());
                 *z.assume_init_mut() = value;
@@ -55,18 +54,19 @@ impl<T: Sized + Send> Local<T> {
 
     pub unsafe fn raw_mut(&self) -> &mut T {
         self.init_check();
-        unsafe { (&mut *(self.value.get())).assume_init_mut() }
+        (&mut *(self.value.get())).assume_init_mut()
     }
 
+    #[inline]
     fn init_check(&self) {
-        if !self.init.load(SeqCst) { panic!("Local resource {} not initialized", self.name) }
+        if !self.init.load(Relaxed) { panic!("Local resource {} not initialized", self.name) } else {}
     }
 }
 
 impl<'a, T: Sized + Send> Deref for Local<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        self.init_check();
+        // self.init_check();
         unsafe { &*(self.value.get() as *const T) }
     }
 }

@@ -11,7 +11,7 @@ use fugit::{Duration, Instant};
 
 use crate::{Local};
 
-const SYSTICK_CYCLES: u32 = 96_000_000;
+const SYSTICK_CYCLES: u32 = 48_000_000;
 
 pub type SysInstant = Instant<u64, 1, SYSTICK_CYCLES>;
 pub type SysDuration = Duration<u32, 1, SYSTICK_CYCLES>;

@@ -20,8 +20,6 @@ pub mod log_defmt;
 pub use defmt::{debug, info, warn, error, trace};
 pub use resource::{Shared, SharedGuard, Local};
 
-// pub mod allocator;
-
 pub fn init(syst: &'static mut SYST) {
     time::init(syst);
     debug!("time ok");
@@ -34,7 +32,8 @@ pub fn exit() -> ! {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, defmt::Format)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(defmt::Format)]
 pub enum RuntimeError {
     Interrupted,
 }

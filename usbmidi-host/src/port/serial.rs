@@ -1,10 +1,11 @@
 //! MIDI using HAL Serial
 
 use heapless::spsc::Queue;
-use midi::{Packet, MidiError, CableNumber, PacketList, PacketParser, is_channel_status};
+use midi::{Packet, MidiError, CableNumber, PacketParser, is_channel_status};
 use embedded_hal::serial;
+use usb_host::USB_MIDI_PACKET_LEN;
 
-pub struct SerialMidi<UART> {
+pub struct UartMidi<UART> {
     pub uart: UART,
     pub tx_fifo: Queue<u8, 64>,
     cable_number: CableNumber,
@@ -12,11 +13,11 @@ pub struct SerialMidi<UART> {
     last_status: Option<u8>,
 }
 
-impl<UART> SerialMidi<UART>
+impl<UART> UartMidi<UART>
     where UART: serial::Write<u8>,
 {
     pub fn new(uart: UART, cable_number: CableNumber) -> Self {
-        SerialMidi {
+        UartMidi {
             uart,
             tx_fifo: Queue::new(),
             cable_number,
@@ -49,7 +50,7 @@ impl<UART> SerialMidi<UART>
     }
 }
 
-impl<UART> midi::Receive for SerialMidi<UART> where
+impl<UART> midi::Receive for UartMidi<UART> where
     UART: serial::Read<u8>,
 {
     fn receive(&mut self) -> Result<Option<Packet>, MidiError> {
@@ -64,29 +65,34 @@ impl<UART> midi::Receive for SerialMidi<UART> where
     }
 }
 
-impl<UART> midi::Transmit for SerialMidi<UART>
+impl<UART> midi::Transmit for UartMidi<UART>
     where UART: serial::Write<u8>,
 {
-    fn transmit(&mut self, packets: PacketList) -> Result<(), MidiError> {
-        for packet in packets.iter() {
-            let mut payload = packet.payload();
-            // Apply MIDI "running status"
-            if is_channel_status(payload[0]) {
-                if let Some(last_status) = self.last_status {
-                    if payload[0] == last_status {
-                        // same status as last time, chop out status byte
-                        payload = &payload[1..];
-                    } else {
-                        // take note of new status
-                        self.last_status = Some(payload[0])
-                    }
+    // allow checking before trying to add packet
+    fn is_tx_full(&self) -> bool {
+        self.tx_fifo.len() + USB_MIDI_PACKET_LEN > self.tx_fifo.capacity()
+    }
+
+    //
+    fn transmit(&mut self, packet: Packet) -> Result<(), MidiError> {
+        let mut payload = packet.payload();
+        // Apply MIDI "running status"
+        if is_channel_status(payload[0]) {
+            if let Some(last_status) = self.last_status {
+                if payload[0] == last_status {
+                    // same status as last time, chop out status byte
+                    payload = &payload[1..];
+                } else {
+                    // take note of new status
+                    self.last_status = Some(payload[0])
                 }
-            } else {
-                // non-repeatable status or no status (sysex)
-                self.last_status = None
             }
-            self.write_all(payload)?;
+        } else {
+            // non-repeatable status or no status (sysex)
+            self.last_status = None
         }
+        self.write_all(payload)?;
+
         self.flush()?;
         Ok(())
     }

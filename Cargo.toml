@@ -4,7 +4,7 @@ resolver = "2"
 
 [profile.dev]
 debug = true
-opt-level = "z"
+#opt-level = "z"
 panic = "unwind"
 
 [profile.release]
@@ -12,4 +12,3 @@ opt-level = "z"
 debug = false
 lto = true
 panic = "abort"
-
