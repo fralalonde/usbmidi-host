@@ -21,7 +21,7 @@ use cortex_m::peripheral::NVIC;
 use trinket_m0::clock::{ClockGenId, ClockSource};
 
 use crate::midi::MidiPorts;
-use core::ops::{ DerefMut};
+use core::ops::{DerefMut};
 
 use atsamd_hal as hal;
 
@@ -54,9 +54,10 @@ use atsamd_hal::gpio::PfD;
 
 use atsamd_hal::rtc::Rtc;
 use cortex_m::asm::delay;
+use cortex_m_rt::exception;
 
 
-use usb_host::{ AddressPool, atsamd, Driver, HostEvent, SingleEp, UsbStack};
+use usb_host::{AddressPool, atsamd, Driver, HostEvent, SingleEp, UsbStack};
 
 use runtime::{Local, Shared};
 use crate::port::serial::UartMidi;
@@ -86,6 +87,8 @@ fn main() -> ! {
         &mut peripherals.NVMCTRL,
     );
 
+
+    // peripherals.PM.cpusel.
     // let _gclk = clocks.gclk0();
     // let rtc_clock_src = clocks
     //     .configure_gclk_divider_and_source(ClockGenId::GCLK2, 1, ClockSource::OSC32K, false)
@@ -132,7 +135,7 @@ fn main() -> ! {
         &mut pins.port,
         &mut clocks,
         &mut peripherals.PM,
-        runtime::now_millis,
+        |ms| { runtime::after_millis(ms).ticks() },
     );
     info!("USB Host OK");
 
@@ -148,14 +151,18 @@ fn main() -> ! {
         core.NVIC.set_priority(interrupt::USB, 3);
         NVIC::unmask(interrupt::USB);
 
-        core.NVIC.set_priority(interrupt::SERCOM0, 3);
-        NVIC::unmask(interrupt::SERCOM0);
+        // core.NVIC.set_priority(interrupt::SERCOM0, 3);
+        // NVIC::unmask(interrupt::SERCOM0);
     }
 
+    // let mut scho = runtime::after_millis(5000);
     loop {
         red_led.toggle();
-        delay(12_000_000);
-        info!("time is {}", runtime::now_millis())
+        delay(20_000_000);
+        // if runtime::now() > scho {
+        //     info!("time is {} tocks", runtime::now().ticks());
+        //     scho = runtime::after_millis(5000);
+        // }
     }
 }
 
@@ -177,7 +184,7 @@ fn USB() {
     // process any changes or data
     usb.handle_irq();
 
-    let mut midi = MIDI_PORTS.lock();
+    let midi = MIDI_PORTS.lock();
 
     // copy MIDI packets from first found USB port to UART
     for handle in midi.list_ports().iter().next() {
@@ -199,7 +206,10 @@ fn USB() {
                             break;
                         }
 
-                        Ok(None) => break
+                        Ok(None) => {
+                            // info!("!!! NO usb midi packet");
+                            break;
+                        }
                     }
                 }
             }

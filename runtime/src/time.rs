@@ -1,24 +1,20 @@
 use core::fmt::{Formatter, Pointer};
 
-use core::sync::atomic::Ordering::Relaxed;
-use atomic_polyfill::AtomicU32;
-
 use cortex_m::peripheral::{SYST};
 use cortex_m::peripheral::syst::SystClkSource;
 
-use cortex_m_rt::exception;
-use fugit::{Duration, Instant};
+use fugit::{Duration, Instant, ExtU64};
 
 use crate::{Local};
 
-const SYSTICK_CYCLES: u32 = 48_000_000;
+const SYSTICK_CYCLES: u32 = 40_000_000;
 
 pub type SysInstant = Instant<u64, 1, SYSTICK_CYCLES>;
-pub type SysDuration = Duration<u32, 1, SYSTICK_CYCLES>;
+pub type SysDuration = Duration<u64, 1, SYSTICK_CYCLES>;
 
 pub struct SysClock {
     syst: &'static mut SYST,
-    past_cycles: AtomicU32,
+    past_cycles: u64,
 }
 
 impl core::fmt::Debug for SysClock {
@@ -34,18 +30,16 @@ pub fn init(syst: &'static mut SYST) {
 }
 
 pub fn now() -> SysInstant {
-     CLOCK.now()
+    CLOCK.now()
 }
 
-pub fn later(cycles: u64) -> SysInstant {
-    CLOCK.later(cycles)
-}
-
-pub fn now_millis() -> u64 {
-    (now() - SysClock::zero()).to_millis()
+pub fn after_millis(millis: u64) -> SysInstant {
+    now() + SysDuration::millis(millis)
 }
 
 const MAX_RVR: u32 = 0x00FF_FFFF;
+
+const SYST_CSR_COUNTFLAG: u32 = 1 << 16;
 
 impl SysClock {
     fn new(syst: &'static mut SYST) -> Self {
@@ -57,17 +51,16 @@ impl SysClock {
         syst.set_reload(MAX_RVR);
 
         syst.enable_counter();
-
-        // actually enables the #[exception] SysTick (see below)
-        syst.enable_interrupt();
+        // only if using #[exception] SysTick()
+        // syst.enable_interrupt();
 
         Self {
             syst,
-            past_cycles: AtomicU32::new(0),
+            past_cycles: 0,
         }
     }
 
-    fn zero() -> SysInstant {
+    pub(crate) const fn zero() -> SysInstant {
         SysInstant::from_ticks(0)
     }
 
@@ -75,25 +68,19 @@ impl SysClock {
         SysInstant::from_ticks(self.cycles())
     }
 
-    fn later(&self, period: u64) -> SysInstant {
-        SysInstant::from_ticks(self.cycles() + period)
-    }
-
-    #[inline]
     fn cycles(&self) -> u64 {
         // systick cvr counts DOWN
         let elapsed_cycles = MAX_RVR - self.syst.cvr.read();
-        self.past_cycles.load(Relaxed) as u64 + elapsed_cycles as u64
-    }
 
-    #[inline]
-    pub fn rollover(&self) {
-        self.past_cycles.fetch_add(MAX_RVR, Relaxed);
+        // blatantly ripped from SYST.has_wrapped()
+        // see https://github.com/rust-embedded/cortex-m/issues/438
+        if self.syst.csr.read() & SYST_CSR_COUNTFLAG != 0 {
+            // This is ok because I hereby declare it to be so.
+            // TODO u64 are not atomic. use u32 += 1 with MAX_RVR pow2 - 1 then shift left upon read.
+            unsafe { *(&self.past_cycles as *const u64 as *mut u64) += MAX_RVR as u64; }
+        }
+        self.past_cycles as u64 + elapsed_cycles as u64
     }
 }
 
-#[exception]
-fn SysTick() {
-    CLOCK.rollover();
-}
 

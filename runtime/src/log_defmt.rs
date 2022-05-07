@@ -5,7 +5,8 @@ use defmt_rtt as _;
 extern crate panic_probe as _;
 
 defmt::timestamp!("{=u64}", {
-    crate::time::now_millis()
+    // FIXME to_millis() division can be CPU expensive
+    (crate::now() - crate::time::SysClock::zero()).to_millis()
 });
 
 #[cfg(all(target_arch = "arm", target_os = "none"))]

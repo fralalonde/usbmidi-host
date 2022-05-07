@@ -7,18 +7,18 @@
 extern crate defmt;
 
 mod time;
-mod array_queue;
+// mod array_queue;
 mod resource;
 
 use cortex_m::peripheral::SYST;
-pub use time::{now, now_millis, SysInstant};
+pub use time::{now, after_millis, SysInstant, SysDuration};
 
 pub use fugit::{ExtU32, Instant, Duration};
 
 pub mod log_defmt;
 
 pub use defmt::{debug, info, warn, error, trace};
-pub use resource::{Shared, SharedGuard, Local};
+pub use resource::{Shared, Local};
 
 pub fn init(syst: &'static mut SYST) {
     time::init(syst);

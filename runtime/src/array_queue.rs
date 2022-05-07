@@ -102,7 +102,7 @@ impl<T: Clone, const N: usize> ArrayQueue<T, N> {
             // try reserving read index
             if self.read_idx.compare_exchange(read_idx, read_idx + 1, Relaxed, Relaxed).is_ok() {
                 let as_mut: &mut [Option<T>; N] = unsafe { &mut *(self.buffer.as_ptr() as *mut [Option<T>; N]) };
-                assert!(as_mut[self.count_to(read_idx)].is_some());
+                // assert!(as_mut[self.count_to(read_idx)].is_some());
                 return as_mut[self.count_to(read_idx)].take();
             }
             // failed reserving read index, try again
