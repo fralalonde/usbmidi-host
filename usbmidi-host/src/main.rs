@@ -57,7 +57,7 @@ use cortex_m::asm::delay;
 use cortex_m_rt::exception;
 
 
-use usb_host::{AddressPool, atsamd, Driver, HostEvent, SingleEp, UsbStack};
+use usb_host::{atsamd, Driver, HostEvent, SingleEp, UsbStack};
 
 use runtime::{Local, Shared};
 use crate::port::serial::UartMidi;
@@ -139,11 +139,12 @@ fn main() -> ! {
     );
     info!("USB Host OK");
 
-    let mut driver = UsbMidiDriver::new(with_midi);
-    let usb_driver = USB_MIDI_DRIVER.init_static(driver);
     usb_host.reset_host();
 
-    USB_STACK.init_static(UsbStack::new(usb_host, usb_driver));
+    let mut usb_stack = UsbStack::new(usb_host);
+    let mut usb_midi = UsbMidiDriver::new(with_midi);
+    usb_stack.add_driver(USB_MIDI_DRIVER.init_static(usb_midi));
+    USB_STACK.init_static(usb_stack);
 
     info!("Board Initialization Complete");
 
@@ -180,9 +181,9 @@ fn midi_route(binding: Binding, packets: PacketList) {
 #[interrupt]
 fn USB() {
     NVIC::mask(interrupt::USB);
-    let mut usb = USB_STACK.lock();
+    let mut usb_stack = USB_STACK.lock();
     // process any changes or data
-    usb.handle_irq();
+    usb_stack.update();
 
     let midi = MIDI_PORTS.lock();
 

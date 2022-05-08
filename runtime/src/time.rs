@@ -51,7 +51,7 @@ impl SysClock {
         syst.set_reload(MAX_RVR);
 
         syst.enable_counter();
-        // only if using #[exception] SysTick()
+        // only if using #[exception] SysTick() (we don't)
         // syst.enable_interrupt();
 
         Self {
