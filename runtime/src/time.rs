@@ -3,7 +3,7 @@ use core::fmt::{Formatter, Pointer};
 use cortex_m::peripheral::{SYST};
 use cortex_m::peripheral::syst::SystClkSource;
 
-use fugit::{Duration, Instant, ExtU64};
+use fugit::{Duration, Instant};
 
 use crate::{Local};
 

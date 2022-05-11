@@ -4,9 +4,8 @@ use core::cell::{UnsafeCell};
 use core::mem::MaybeUninit;
 
 use core::ops::{Deref, DerefMut};
-use core::sync::atomic::{Ordering};
-use core::sync::atomic::Ordering::{AcqRel, Relaxed, SeqCst};
-use core::task::{Waker};
+
+use core::sync::atomic::Ordering::{Relaxed};
 use atomic_polyfill::AtomicBool;
 use spin::mutex::{SpinMutex, SpinMutexGuard};
 

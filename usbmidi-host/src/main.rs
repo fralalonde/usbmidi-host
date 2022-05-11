@@ -57,7 +57,8 @@ use cortex_m::asm::delay;
 use cortex_m_rt::exception;
 
 
-use usb_host::{atsamd, Driver, HostEvent, SingleEp, UsbStack};
+use usb_host::{atsamd, Driver, HostEvent, Endpoint, UsbStack};
+use usb_host::keyboard::BootKeyboard;
 
 use runtime::{Local, Shared};
 use crate::port::serial::UartMidi;
@@ -68,6 +69,7 @@ static UART_MIDI: Shared<UartMidi<UART0<Sercom0Pad3<Pa7<PfD>>, Sercom0Pad2<Pa6<P
 static MIDI_PORTS: Shared<MidiRegistry<2>> = Shared::uninit("MIDI_PORTS");
 
 static USB_MIDI_DRIVER: Local<UsbMidiDriver> = Local::uninit("USB_MIDI_DRIVER");
+static BOOTKBD: Local<BootKeyboard> = Local::uninit("BOOTKBD");
 
 static USB_STACK: Shared<UsbStack<atsamd::HostController>> = Shared::uninit("USB_STACK");
 
@@ -144,6 +146,8 @@ fn main() -> ! {
     let mut usb_stack = UsbStack::new(usb_host);
     let mut usb_midi = UsbMidiDriver::new(with_midi);
     usb_stack.add_driver(USB_MIDI_DRIVER.init_static(usb_midi));
+    let mut bootkbd = BootKeyboard::new();
+    usb_stack.add_driver(BOOTKBD.init_static(bootkbd));
     USB_STACK.init_static(usb_stack);
 
     info!("Board Initialization Complete");
@@ -178,6 +182,7 @@ fn midi_route(binding: Binding, packets: PacketList) {
     // router.midi_route(cx.scheduled, packets, binding, cx.spawn).unwrap();
 }
 
+#[allow(non_snake_case)]
 #[interrupt]
 fn USB() {
     NVIC::mask(interrupt::USB);
@@ -203,7 +208,7 @@ fn USB() {
                             }
                         }
                         Err(err) => {
-                            warn!("Failed to read from port: {}", info);
+                            warn!("Failed to read from port: {}, error: {}", info, err);
                             break;
                         }
 
@@ -220,6 +225,7 @@ fn USB() {
     unsafe { NVIC::unmask(interrupt::USB) }
 }
 
+#[allow(non_snake_case)]
 #[interrupt]
 fn SERCOM0() {
     NVIC::mask(interrupt::SERCOM0);
