@@ -2,12 +2,14 @@
 #![no_main]
 
 #[macro_use]
-extern crate runtime;
+extern crate defmt;
 
 extern crate embedded_midi as midi;
 
 extern crate embedded_usb_host as usb_host;
 
+mod time;
+mod resource;
 mod port;
 
 use trinket_m0 as bsp;
@@ -60,7 +62,7 @@ use cortex_m_rt::exception;
 use usb_host::{atsamd, Driver, HostEvent, Endpoint, UsbStack};
 use usb_host::keyboard::BootKbdDriver;
 
-use runtime::{Local, Shared};
+use resource::{Local, Shared};
 use crate::port::serial::UartMidi;
 
 static CORE: Local<CorePeripherals> = Local::uninit("CORE");
@@ -75,11 +77,29 @@ static USB_STACK: Shared<UsbStack<atsamd::HostController>> = Shared::uninit("USB
 
 const RXC: u8 = 0x04;
 
+
+
+use defmt_rtt as _;
+
+extern crate panic_probe as _;
+
+defmt::timestamp!("{=u64}", {
+    // FIXME to_millis() division can be CPU expensive
+    (time::now() - crate::time::SysClock::zero()).to_millis()
+});
+
+#[cfg(all(target_arch = "arm", target_os = "none"))]
+#[defmt::panic_handler]
+fn panic() -> ! {
+    cortex_m::asm::udf()
+}
+
+
 #[entry]
 fn main() -> ! {
     let mut peripherals = Peripherals::take().unwrap();
     let mut core = CORE.init_static(CorePeripherals::take().unwrap());
-    runtime::init(&mut core.SYST);
+    time::init(&mut core.SYST);
 
     // internal 32khz required for USB to complete swrst
     let mut clocks = GenericClockController::with_internal_32kosc(
@@ -88,7 +108,6 @@ fn main() -> ! {
         &mut peripherals.SYSCTRL,
         &mut peripherals.NVMCTRL,
     );
-
 
     // peripherals.PM.cpusel.
     // let _gclk = clocks.gclk0();
@@ -131,22 +150,22 @@ fn main() -> ! {
         Some(pins.usb_host_enable.into_floating_input(&mut pins.port)),
     );
 
-    let mut usb_host = embedded_usb_host::atsamd::HostController::new(
+    let mut usb_host = atsamd::HostController::new(
         peripherals.USB,
         usb_pins,
         &mut pins.port,
         &mut clocks,
         &mut peripherals.PM,
-        |ms| { runtime::after_millis(ms).ticks() },
+        |ms| { time::after_millis(ms).ticks() },
     );
     info!("USB Host OK");
 
     usb_host.reset_host();
 
     let mut usb_stack = UsbStack::new(usb_host);
-    let mut usb_midi = UsbMidiDriver::new(with_midi);
+    let usb_midi = UsbMidiDriver::new(with_midi);
     usb_stack.add_driver(USB_MIDI_DRIVER.init_static(usb_midi));
-    let mut bootkbd = BootKbdDriver::new();
+    let bootkbd = BootKbdDriver::new();
     usb_stack.add_driver(BOOTKBD.init_static(bootkbd));
     USB_STACK.init_static(usb_stack);
 
@@ -187,7 +206,7 @@ fn midi_route(binding: Binding, packets: PacketList) {
 fn USB() {
     NVIC::mask(interrupt::USB);
     let mut usb_stack = USB_STACK.lock();
-    // process any changes or data
+    // process any state changes and pending transfers
     usb_stack.update();
 
     let midi = MIDI_PORTS.lock();

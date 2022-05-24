@@ -31,14 +31,6 @@ impl<T: Sized + Send> Local<T> {
         }
     }
 
-    pub const fn new(name: &'static str, value: T) -> Self {
-        Self {
-            name,
-            value: UnsafeCell::new(MaybeUninit::new(value)),
-            init: AtomicBool::new(true),
-        }
-    }
-
     pub fn init_static(&self, value: T) -> &mut T {
         match self.init.compare_exchange(false, true, Relaxed, Relaxed) {
             Ok(false) => unsafe {
