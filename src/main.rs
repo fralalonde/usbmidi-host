@@ -78,7 +78,6 @@ static USB_STACK: Shared<UsbStack<atsamd::HostController>> = Shared::uninit("USB
 const RXC: u8 = 0x04;
 
 
-
 use defmt_rtt as _;
 
 extern crate panic_probe as _;
@@ -91,9 +90,8 @@ defmt::timestamp!("{=u64}", {
 #[cfg(all(target_arch = "arm", target_os = "none"))]
 #[defmt::panic_handler]
 fn panic() -> ! {
-    cortex_m::asm::udf()
+    loop { cortex_m::asm::bkpt() }
 }
-
 
 #[entry]
 fn main() -> ! {
@@ -156,7 +154,8 @@ fn main() -> ! {
         &mut pins.port,
         &mut clocks,
         &mut peripherals.PM,
-        |ms| { time::after_millis(ms).ticks() },
+        || time::now().ticks(),
+        |ms|  time::after_millis(ms).ticks(),
     );
     info!("USB Host OK");
 
@@ -194,11 +193,6 @@ fn with_midi(fun: &mut dyn FnMut(&mut (dyn MidiPorts + Send + Sync))) {
     let mut mlock = MIDI_PORTS.lock();
     // let midi = MIDI_PORTS.lock().deref_mut();
     fun(mlock.deref_mut())
-}
-
-fn midi_route(binding: Binding, packets: PacketList) {
-    // let router: &mut route::Router = cx.resources.midi_router;
-    // router.midi_route(cx.scheduled, packets, binding, cx.spawn).unwrap();
 }
 
 #[allow(non_snake_case)]
